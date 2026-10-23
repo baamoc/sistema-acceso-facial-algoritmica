@@ -1,10 +1,14 @@
 import tempfile
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import numpy as np
 from werkzeug.security import generate_password_hash
 from app import create_app
 from models.database import close_db, get_db
 from services.camera_service import CameraService
+from services.face_service import FaceService
 
 class NoFace:
  ready=False; error='Prueba sin modelos'
@@ -78,3 +82,25 @@ def test_recognized_status_exposes_client_ci():
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()
+def test_face_service_serializes_detector_and_recognizer_inference():
+ class Probe:
+  def __init__(self): self.active=0; self.maximum=0; self.lock=threading.Lock()
+  def operation(self, result=None):
+   with self.lock:
+    self.active+=1; self.maximum=max(self.maximum,self.active)
+   time.sleep(.01)
+   with self.lock: self.active-=1
+   return result
+ class Detector:
+  def setInputSize(self, size): probe.operation()
+  def detect(self, frame): return probe.operation((None, np.zeros((1,15),dtype=np.float32)))
+ class Recognizer:
+  def alignCrop(self, frame, face): return probe.operation(frame)
+  def feature(self, aligned): return probe.operation(np.array([[1,0]],dtype=np.float32))
+ probe=Probe(); service=FaceService.__new__(FaceService)
+ service.detector=Detector(); service.recognizer=Recognizer(); service._inference_lock=threading.RLock()
+ frame=np.zeros((8,8,3),dtype=np.uint8); face=np.zeros(15,dtype=np.float32)
+ with ThreadPoolExecutor(max_workers=8) as executor:
+  futures=[executor.submit(service.detect,frame) if i%2==0 else executor.submit(service.embedding,frame,face) for i in range(16)]
+  for future in futures: future.result()
+ assert probe.maximum==1

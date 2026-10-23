@@ -1,6 +1,7 @@
 """YuNet detecta y alinea; SFace transforma un rostro en un embedding numérico."""
 from pathlib import Path
 from urllib.request import urlretrieve
+import threading
 import cv2, numpy as np
 
 MODELS = {
@@ -11,6 +12,9 @@ class FaceService:
     def __init__(self, model_dir, detection_threshold, cosine_threshold):
         self.model_dir=Path(model_dir); self.det_threshold=detection_threshold; self.cos_threshold=cosine_threshold
         self.detector=self.recognizer=None; self.error=None
+        # FaceDetectorYN y FaceRecognizerSF comparten estado interno mutable de OpenCV.
+        # El mismo lock serializa la inferencia del hilo de cámara y las peticiones admin.
+        self._inference_lock=threading.RLock()
         try:
             self.model_dir.mkdir(exist_ok=True)
             paths=[]
@@ -26,11 +30,13 @@ class FaceService:
     def ready(self): return self.detector is not None and self.recognizer is not None
     def detect(self, frame):
         if not self.ready: return []
-        h,w=frame.shape[:2]; self.detector.setInputSize((w,h)); _, faces=self.detector.detect(frame)
+        with self._inference_lock:
+            h,w=frame.shape[:2]; self.detector.setInputSize((w,h)); _, faces=self.detector.detect(frame)
         return [] if faces is None else list(faces)
     def embedding(self, frame, face):
-        aligned=self.recognizer.alignCrop(frame, face)
-        return self.recognizer.feature(aligned).flatten().astype(np.float32)
+        with self._inference_lock:
+            aligned=self.recognizer.alignCrop(frame, face)
+            return self.recognizer.feature(aligned).flatten().astype(np.float32)
     @staticmethod
     def cosine(a,b):
         denom=np.linalg.norm(a)*np.linalg.norm(b)

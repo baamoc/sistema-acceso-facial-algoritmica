@@ -21,12 +21,12 @@ Al primer inicio `FaceService` descarga en `face_models/` los modelos ONNX ofici
 
 ## Uso
 
-La página inicial es exclusivamente pública: video, resultado, nombre, vigencia y accesos. El único enlace es **Administrador**. Después de autenticarse, complete el formulario de alta mientras hay exactamente un rostro frente a la cámara y pulse “Capturar rostro y registrar”. La edición permite recapturar opcionalmente. Desactivar hace baja lógica: conserva cliente e historial.
+La página inicial es exclusivamente pública: video, resultado, nombre, CI, vigencia y accesos. El único enlace es **Administrador**. Después de autenticarse, complete el formulario de alta mientras hay exactamente un rostro frente a la cámara y pulse “Capturar rostro y registrar”. La edición permite recapturar opcionalmente. Desactivar hace baja lógica: conserva cliente e historial.
 
 ## Arquitectura
 
-- `services/camera_service.py`: único propietario de `cv2.VideoCapture(0)`, con un hilo que conserva el último cuadro. El streaming público y la captura de alta sólo leen ese cuadro; nunca abren una segunda cámara.
-- `services/face_service.py`: YuNet detecta rostro y sus puntos; SFace alinea y transforma el rostro en un **embedding**, un vector numérico que resume rasgos faciales.
+- `services/camera_service.py`: único propietario de `cv2.VideoCapture(0)`. Conserva `raw_frame` sin overlays para alta/recaptura y `display_frame` procesado para el streaming público; nunca abre una segunda cámara.
+- `services/face_service.py`: YuNet detecta rostro y sus puntos; SFace alinea y transforma el rostro en un **embedding**, un vector numérico que resume rasgos faciales. Un `RLock` serializa la inferencia sobre ambos modelos entre el hilo de cámara y las peticiones administrativas.
 - `services/access_service.py`: compara el embedding actual con los almacenados usando similitud coseno, aplica vigencia y registra historial.
 - `models/database.py`: SQLite y sus tres tablas: `administradores`, `clientes`, `accesos`.
 - `routes/`: rutas pública y administrativa separadas.
@@ -41,7 +41,14 @@ El sistema no cuenta cuadros: guarda la última presencia monotónica de cada cl
 
 ## Pruebas
 
-Ejecute `python -m unittest discover -s tests -v`. Las pruebas usan archivos SQLite reales temporales y comprueban las cuatro reglas de fecha, inactivo, hash/login y presencia (un evento continuo, otro tras ausencia). La demostración de cámara debe hacerse con webcam física: alta, reconocimiento y retorno tras más de cuatro segundos.
+Instale las dependencias de desarrollo y ejecute pytest:
+
+```powershell
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Las pruebas usan archivos SQLite reales temporales y comprueban vigencia, hash/login, presencia, separación entre cuadros crudo/visual, CI público y serialización concurrente de YuNet/SFace. La demostración de cámara debe hacerse con webcam física: alta, reconocimiento y retorno tras más de cuatro segundos.
 
 ## Limitaciones conocidas
 
