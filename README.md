@@ -1,0 +1,48 @@
+# Sistema web de acceso por reconocimiento facial
+
+Aplicación local para el segundo parcial de Algorítmica Avanzada. Una sola aplicación Flask ofrece la pantalla pública y el área administrativa, usando **una única cámara** compartida.
+
+## Instalación y arranque
+
+Requiere Python 3.10+ y una webcam. En PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:FIRST_ADMIN_USER="admin"
+$env:FIRST_ADMIN_PASSWORD="cambie-esta-clave"
+python app.py
+```
+
+Abra `http://127.0.0.1:5000`. Las variables `FIRST_ADMIN_*` sólo crean el primer administrador cuando la base no tiene ninguno; luego pueden quitarse. Las contraseñas se guardan como hash de Werkzeug, nunca en texto plano. Si se desea otra clave de sesión, defina `SECRET_KEY`.
+
+Al primer inicio `FaceService` descarga en `face_models/` los modelos ONNX oficiales de OpenCV Zoo. La descarga requiere conexión; se reutilizan luego localmente. No se versionan ni modelos, ni fotografías, ni la base SQLite.
+
+## Uso
+
+La página inicial es exclusivamente pública: video, resultado, nombre, vigencia y accesos. El único enlace es **Administrador**. Después de autenticarse, complete el formulario de alta mientras hay exactamente un rostro frente a la cámara y pulse “Capturar rostro y registrar”. La edición permite recapturar opcionalmente. Desactivar hace baja lógica: conserva cliente e historial.
+
+## Arquitectura
+
+- `services/camera_service.py`: único propietario de `cv2.VideoCapture(0)`, con un hilo que conserva el último cuadro. El streaming público y la captura de alta sólo leen ese cuadro; nunca abren una segunda cámara.
+- `services/face_service.py`: YuNet detecta rostro y sus puntos; SFace alinea y transforma el rostro en un **embedding**, un vector numérico que resume rasgos faciales.
+- `services/access_service.py`: compara el embedding actual con los almacenados usando similitud coseno, aplica vigencia y registra historial.
+- `models/database.py`: SQLite y sus tres tablas: `administradores`, `clientes`, `accesos`.
+- `routes/`: rutas pública y administrativa separadas.
+
+El umbral de detección es `0.8` y el de similitud coseno `0.363`, configurables con `DETECTION_THRESHOLD` y `COSINE_THRESHOLD`. Una similitud igual o mayor al umbral identifica al cliente. Son valores iniciales; iluminación, cámara y población pueden exigir calibración.
+
+## Vigencia y contador
+
+La fecha local (`date.today()`) se compara como sigue: inactivo siempre deniega; antes de `fecha_inicio` deniega; después de `fecha_fin` deniega; `fecha_fin` vacío significa indefinido y permite desde el inicio. Cada resultado explica el motivo.
+
+El sistema no cuenta cuadros: guarda la última presencia monotónica de cada cliente. Sólo inserta un evento al comenzar un encuentro; mientras siga apareciendo antes de `ABSENCE_SECONDS` (por defecto 4 s), no crea otro. Si deja de verse ese tiempo y vuelve, genera otro evento. El total mostrado cuenta sólo eventos permitidos, y el historial conserva permitidos y denegados.
+
+## Pruebas
+
+Ejecute `python -m unittest discover -s tests -v`. Las pruebas usan archivos SQLite reales temporales y comprueban las cuatro reglas de fecha, inactivo, hash/login y presencia (un evento continuo, otro tras ausencia). La demostración de cámara debe hacerse con webcam física: alta, reconocimiento y retorno tras más de cuatro segundos.
+
+## Limitaciones conocidas
+
+Es una solución local académica: no implementa detección anti-suplantación, cifrado de embeddings, múltiples cámaras ni tolerancia a mala iluminación. La identificación compara linealmente todos los clientes, apropiada para una lista pequeña.
