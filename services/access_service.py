@@ -1,9 +1,10 @@
-from datetime import date
-import time, cv2, numpy as np
+from datetime import date, datetime
+import threading, time, cv2, numpy as np
 
 class AccessService:
     def __init__(self, app, face, absence_seconds):
         self.app=app; self.face=face; self.absence_seconds=absence_seconds; self.presence={}
+        self.recording_enabled=False; self._presence_lock=threading.RLock()
         self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}
         self.frame_no=0
     def evaluate(self, client):
@@ -17,13 +18,23 @@ class AccessService:
         return get_db().execute('SELECT * FROM clientes').fetchall()
     def _record_encounter(self, client, result, reason):
         from models.database import get_db
-        db=get_db(); db.execute('INSERT INTO accesos(cliente_id,resultado,motivo) VALUES (?,?,?)',(client['id'],result,reason)); db.commit()
+        local_time=datetime.now().astimezone().isoformat(timespec='seconds')
+        db=get_db(); db.execute('INSERT INTO accesos(cliente_id,fecha_hora,resultado,motivo) VALUES (?,?,?,?)',(client['id'],local_time,result,reason)); db.commit()
+    def set_recording_enabled(self, enabled):
+        """Activa el historial sólo en vista pública y reinicia la presencia al volver."""
+        with self._presence_lock:
+            enabled=bool(enabled)
+            if enabled and not self.recording_enabled:
+                self.presence.clear()
+            self.recording_enabled=enabled
     def handle_recognized(self, client, now=None):
         """Actualiza presencia y registra sólo el primer cuadro de cada encuentro."""
         result,reason=self.evaluate(client); now=time.monotonic() if now is None else now
-        if now-self.presence.get(client['id'], float('-inf')) > self.absence_seconds:
-            self._record_encounter(client,result,reason)
-        self.presence[client['id']]=now
+        with self._presence_lock:
+            if self.recording_enabled:
+                if now-self.presence.get(client['id'], float('-inf')) > self.absence_seconds:
+                    self._record_encounter(client,result,reason)
+                self.presence[client['id']]=now
         return result,reason
     def process(self, frame):
         self.frame_no+=1

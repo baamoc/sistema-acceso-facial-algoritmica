@@ -7,6 +7,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from models.database import get_db
 
 bp=Blueprint('admin',__name__,url_prefix='/admin')
+@bp.before_request
+def suspend_access_recording():
+ current_app.extensions['access'].set_recording_enabled(False)
 def login_required(fn):
  @wraps(fn)
  def wrapped(*a,**kw):

@@ -21,7 +21,7 @@ Al primer inicio `FaceService` descarga en `face_models/` los modelos ONNX ofici
 
 ## Uso
 
-La página inicial es exclusivamente pública: video, resultado, nombre, CI, vigencia y accesos. El único enlace es **Administrador**. Después de autenticarse, complete el formulario de alta mientras hay exactamente un rostro frente a la cámara y pulse “Capturar rostro y registrar”. La edición permite recapturar opcionalmente. Desactivar hace baja lógica: conserva cliente e historial.
+La página inicial es exclusivamente pública: video, resultado, nombre, CI, vigencia y número de accesos. El único enlace es **Administrador**. Después de autenticarse, complete el formulario de alta mientras hay exactamente un rostro frente a la cámara y pulse “Capturar rostro y registrar”. La edición permite recapturar opcionalmente. Desactivar hace baja lógica: conserva cliente e historial.
 
 ## Arquitectura
 
@@ -39,6 +39,8 @@ La fecha local (`date.today()`) se compara como sigue: inactivo siempre deniega;
 
 El sistema no cuenta cuadros: guarda la última presencia monotónica de cada cliente. Sólo inserta un evento al comenzar un encuentro; mientras siga apareciendo antes de `ABSENCE_SECONDS` (por defecto 4 s), no crea otro. Si deja de verse ese tiempo y vuelve, genera otro evento. El total mostrado cuenta sólo eventos permitidos, y el historial conserva permitidos y denegados.
 
+El registro de eventos se habilita al abrir la vista pública y se suspende al entrar en cualquier ruta administrativa. La cámara y el reconocimiento siguen compartidos y activos para permitir capturas. Al volver a la vista pública se limpia la presencia, de modo que el siguiente reconocimiento inicia un intento nuevo. Cada evento guarda `fecha_hora` con la hora local del sistema y su desplazamiento UTC en formato ISO 8601; así el historial conserva una referencia temporal inequívoca.
+
 ## Pruebas
 
 Instale las dependencias de desarrollo y ejecute pytest:
@@ -48,7 +50,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Las pruebas usan archivos SQLite reales temporales y comprueban vigencia, hash/login, presencia, separación entre cuadros crudo/visual, CI público y serialización concurrente de YuNet/SFace. La demostración de cámara debe hacerse con webcam física: alta, reconocimiento y retorno tras más de cuatro segundos.
+Las pruebas usan archivos SQLite reales temporales y comprueban vigencia, hash/login, modos público/administrativo, presencia, hora local, separación entre cuadros crudo/visual, CI público y serialización concurrente de YuNet/SFace. La demostración posterior a cambios de cámara o registro debe repetirse con webcam física.
 
 ## Limitaciones conocidas
 

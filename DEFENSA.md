@@ -12,7 +12,7 @@
 
 **¿Por qué una sola cámara?** `CameraService` es el único que llama `cv2.VideoCapture`. Mantiene el último cuadro para streaming y altas, evitando que dos procesos disputen la webcam.
 
-**¿Cómo se evita contar cada frame?** Se conserva la hora monotónica de la última vez que se vio cada cliente. Un evento se inserta sólo si pasó `ABSENCE_SECONDS` desde esa presencia. El valor inicial es cuatro segundos.
+**¿Cómo se evita contar cada frame?** Se conserva la hora monotónica de la última vez que se vio cada cliente. Un evento se inserta sólo si pasó `ABSENCE_SECONDS` desde esa presencia. El valor inicial es cuatro segundos. En administración el historial queda suspendido; al volver a la vista pública se limpia la presencia y el siguiente reconocimiento inicia un intento nuevo.
 
 **¿Por qué usar baja lógica?** Desactivar no borra al cliente ni sus registros; permite auditoría y reactivación.
 
@@ -21,6 +21,8 @@
 **¿Cómo se representa acceso indefinido?** `fecha_fin` es `NULL`; desde `fecha_inicio` el resultado es permitido y la UI muestra “Indefinido”.
 
 **¿Por qué historial y no sólo contador?** `accesos` guarda cuándo, resultado y motivo. El total permitido se calcula desde esos eventos y el administrador puede auditar denegaciones.
+
+**¿Qué hora guarda el historial?** La hora local del sistema con su desplazamiento UTC, en formato ISO 8601. Esto evita mostrar UTC como si fuera hora local y conserva la zona temporal del evento.
 
 **¿Por qué SQLite?** No necesita servidor externo, persiste en archivo y es suficiente para una aplicación local universitaria.
 

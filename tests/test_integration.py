@@ -2,6 +2,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 import numpy as np
 from werkzeug.security import generate_password_hash
@@ -37,14 +38,22 @@ def test_validity_rules_use_real_sqlite():
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()
-def test_presence_counts_once_then_again_after_absence_in_real_db():
+def test_access_events_only_record_in_public_mode_with_presence_cooldown():
  app,tmp=build()
  try:
   cid=insert(app,'Ana','9')
   with app.app_context():
    client=get_db().execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone(); s=app.extensions['access']
-   s.handle_recognized(client,10); s.handle_recognized(client,11); s.handle_recognized(client,13.9); s.handle_recognized(client,18)
-   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==2
+   s.handle_recognized(client,10)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==0
+   s.set_recording_enabled(True); s.handle_recognized(client,11)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
+   s.handle_recognized(client,12); s.handle_recognized(client,14.9)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
+   s.handle_recognized(client,20)
+   events=get_db().execute('SELECT fecha_hora FROM accesos WHERE cliente_id=? ORDER BY id',(cid,)).fetchall()
+   assert len(events)==2
+   assert all(datetime.fromisoformat(event['fecha_hora']).utcoffset() is not None for event in events)
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()
@@ -66,6 +75,22 @@ def test_build_does_not_inherit_initial_admin_environment(monkeypatch):
  try:
   with app.app_context():
    assert get_db().execute('SELECT COUNT(*) FROM administradores').fetchone()[0]==0
+ finally:
+  with app.app_context(): close_db()
+  tmp.cleanup()
+def test_public_and_admin_routes_toggle_recording_and_reset_presence():
+ app,tmp=build()
+ try:
+  service=app.extensions['access']; client=app.test_client()
+  assert service.recording_enabled is False
+  assert client.get('/').status_code==200
+  assert service.recording_enabled is True
+  service.presence[99]=123
+  assert client.get('/admin/login').status_code==200
+  assert service.recording_enabled is False
+  assert client.get('/').status_code==200
+  assert service.recording_enabled is True
+  assert service.presence=={}
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()
