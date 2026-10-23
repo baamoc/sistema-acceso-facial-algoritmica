@@ -22,7 +22,7 @@ class RecognizesFace:
 
 def build(face=None):
  folder=tempfile.TemporaryDirectory(); root=Path(folder.name)
- app=create_app({'TESTING':True,'DATABASE':root/'real.sqlite','FACE_DIR':root/'faces','MODEL_DIR':root/'models','FACE_SERVICE':face or NoFace(),'ABSENCE_SECONDS':4},start_camera=False)
+ app=create_app({'TESTING':True,'DATABASE':root/'real.sqlite','FACE_DIR':root/'faces','MODEL_DIR':root/'models','FACE_SERVICE':face or NoFace(),'ABSENCE_SECONDS':4,'FIRST_ADMIN_USER':None,'FIRST_ADMIN_PASSWORD':None},start_camera=False)
  return app,folder
 def insert(app,name,ci,start='2020-01-01',end=None,active=1):
  with app.app_context():
@@ -56,6 +56,16 @@ def test_login_password_hash_and_persistence():
    assert db.execute('SELECT password_hash FROM administradores').fetchone()[0] != 'secreta'
   c=app.test_client(); assert c.post('/admin/login',data={'usuario':'admin','password':'mala'}).status_code==200
   assert c.post('/admin/login',data={'usuario':'admin','password':'secreta'}).status_code==302
+ finally:
+  with app.app_context(): close_db()
+  tmp.cleanup()
+def test_build_does_not_inherit_initial_admin_environment(monkeypatch):
+ monkeypatch.setenv('FIRST_ADMIN_USER','admin-real')
+ monkeypatch.setenv('FIRST_ADMIN_PASSWORD','secreto-real')
+ app,tmp=build()
+ try:
+  with app.app_context():
+   assert get_db().execute('SELECT COUNT(*) FROM administradores').fetchone()[0]==0
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()
