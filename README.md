@@ -37,7 +37,7 @@ El umbral de detección es `0.8` y el de similitud coseno `0.363`, configurables
 
 La fecha local (`date.today()`) se compara como sigue: inactivo siempre deniega; antes de `fecha_inicio` deniega; después de `fecha_fin` deniega; `fecha_fin` vacío significa indefinido y permite desde el inicio. Cada resultado explica el motivo.
 
-El sistema no cuenta cuadros: guarda la última presencia monotónica de cada cliente. Sólo inserta un evento al comenzar un encuentro; mientras siga apareciendo antes de `ABSENCE_SECONDS` (por defecto 4 s), no crea otro. Si deja de verse ese tiempo y vuelve, genera otro evento. El total mostrado cuenta sólo eventos permitidos, y el historial conserva permitidos y denegados.
+El sistema no cuenta cuadros ni usa la última identificación como prueba de salida. Después del primer reconocimiento el encuentro queda activo aunque SFace pierda temporalmente la identidad o baje la similitud. YuNet debe observar **cero rostros de forma continua** durante `ABSENCE_SECONDS` (por defecto 4 s) para cerrar el encuentro y permitir otro acceso. Si YuNet sigue viendo una cara, o vuelve a verla antes del plazo, no se rearma el contador. El total mostrado cuenta sólo eventos permitidos, y el historial conserva permitidos y denegados.
 
 El registro de eventos se habilita al abrir la vista pública y se suspende al entrar en cualquier ruta administrativa. La cámara y el reconocimiento siguen compartidos y activos para permitir capturas. Al volver a la vista pública se limpia la presencia, de modo que el siguiente reconocimiento inicia un intento nuevo. Cada evento guarda `fecha_hora` con la hora local del sistema y su desplazamiento UTC en formato ISO 8601; así el historial conserva una referencia temporal inequívoca.
 

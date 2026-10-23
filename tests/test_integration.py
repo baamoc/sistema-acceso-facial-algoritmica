@@ -44,13 +44,17 @@ def test_access_events_only_record_in_public_mode_with_presence_cooldown():
   cid=insert(app,'Ana','9')
   with app.app_context():
    client=get_db().execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone(); s=app.extensions['access']
-   s.handle_recognized(client,10)
+   s.observe_face_presence(True,10); s.handle_recognized(client)
    assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==0
-   s.set_recording_enabled(True); s.handle_recognized(client,11)
+   s.set_recording_enabled(True); s.observe_face_presence(True,11); s.handle_recognized(client)
    assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
-   s.handle_recognized(client,12); s.handle_recognized(client,14.9)
+   s.handle_recognized(client); s.handle_recognized(client)
    assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
-   s.handle_recognized(client,20)
+   s.observe_face_presence(True,20); s.handle_recognized(client)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
+   s.observe_face_presence(False,30); s.observe_face_presence(False,33.9); s.observe_face_presence(True,34); s.handle_recognized(client)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos WHERE cliente_id=?',(cid,)).fetchone()[0]==1
+   s.observe_face_presence(False,40); s.observe_face_presence(False,44); s.observe_face_presence(True,45); s.handle_recognized(client)
    events=get_db().execute('SELECT fecha_hora FROM accesos WHERE cliente_id=? ORDER BY id',(cid,)).fetchall()
    assert len(events)==2
    assert all(datetime.fromisoformat(event['fecha_hora']).utcoffset() is not None for event in events)
@@ -81,16 +85,29 @@ def test_build_does_not_inherit_initial_admin_environment(monkeypatch):
 def test_public_and_admin_routes_toggle_recording_and_reset_presence():
  app,tmp=build()
  try:
-  service=app.extensions['access']; client=app.test_client()
+  cid=insert(app,'Ruta Pública','77'); service=app.extensions['access']; client=app.test_client()
+  with app.app_context():
+   recognized=get_db().execute('SELECT * FROM clientes WHERE id=?',(cid,)).fetchone()
+   service.handle_recognized(recognized)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos').fetchone()[0]==0
   assert service.recording_enabled is False
   assert client.get('/').status_code==200
   assert service.recording_enabled is True
-  service.presence[99]=123
+  with app.app_context():
+   service.handle_recognized(recognized); service.handle_recognized(recognized)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos').fetchone()[0]==1
   assert client.get('/admin/login').status_code==200
   assert service.recording_enabled is False
+  with app.app_context():
+   service.handle_recognized(recognized)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos').fetchone()[0]==1
   assert client.get('/').status_code==200
   assert service.recording_enabled is True
-  assert service.presence=={}
+  assert service.encounter_active is False
+  assert service.no_face_since is None
+  with app.app_context():
+   service.handle_recognized(recognized); service.handle_recognized(recognized)
+   assert get_db().execute('SELECT COUNT(*) FROM accesos').fetchone()[0]==2
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()

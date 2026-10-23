@@ -3,8 +3,9 @@ import threading, time, cv2, numpy as np
 
 class AccessService:
     def __init__(self, app, face, absence_seconds):
-        self.app=app; self.face=face; self.absence_seconds=absence_seconds; self.presence={}
-        self.recording_enabled=False; self._presence_lock=threading.RLock()
+        self.app=app; self.face=face; self.absence_seconds=absence_seconds
+        self.recording_enabled=False; self.encounter_active=False; self.no_face_since=None
+        self._presence_lock=threading.RLock()
         self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}
         self.frame_no=0
     def evaluate(self, client):
@@ -25,22 +26,33 @@ class AccessService:
         with self._presence_lock:
             enabled=bool(enabled)
             if enabled and not self.recording_enabled:
-                self.presence.clear()
+                self.encounter_active=False
+                self.no_face_since=None
             self.recording_enabled=enabled
-    def handle_recognized(self, client, now=None):
-        """Actualiza presencia y registra sólo el primer cuadro de cada encuentro."""
-        result,reason=self.evaluate(client); now=time.monotonic() if now is None else now
+    def observe_face_presence(self, has_faces, now=None):
+        """Rearma el encuentro sólo tras cero rostros continuos confirmados por YuNet."""
+        now=time.monotonic() if now is None else now
         with self._presence_lock:
-            if self.recording_enabled:
-                if now-self.presence.get(client['id'], float('-inf')) > self.absence_seconds:
-                    self._record_encounter(client,result,reason)
-                self.presence[client['id']]=now
+            if has_faces:
+                self.no_face_since=None
+            elif self.no_face_since is None:
+                self.no_face_since=now
+            elif now-self.no_face_since >= self.absence_seconds:
+                self.encounter_active=False
+    def handle_recognized(self, client):
+        """Registra como máximo una identificación durante el encuentro físico activo."""
+        result,reason=self.evaluate(client)
+        with self._presence_lock:
+            if self.recording_enabled and not self.encounter_active:
+                self._record_encounter(client,result,reason)
+                self.encounter_active=True
         return result,reason
     def process(self, frame):
         self.frame_no+=1
         if not self.face.ready: self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':self.face.error or 'Cargando modelos faciales'}; return frame
         if self.frame_no % 4: return frame
         faces=self.face.detect(frame)
+        self.observe_face_presence(bool(faces))
         if not faces:
             self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}; return frame
         face=max(faces,key=lambda f:f[2]*f[3]); emb=self.face.embedding(frame,face)

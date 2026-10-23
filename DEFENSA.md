@@ -12,7 +12,7 @@
 
 **¿Por qué una sola cámara?** `CameraService` es el único que llama `cv2.VideoCapture`. Mantiene el último cuadro para streaming y altas, evitando que dos procesos disputen la webcam.
 
-**¿Cómo se evita contar cada frame?** Se conserva la hora monotónica de la última vez que se vio cada cliente. Un evento se inserta sólo si pasó `ABSENCE_SECONDS` desde esa presencia. El valor inicial es cuatro segundos. En administración el historial queda suspendido; al volver a la vista pública se limpia la presencia y el siguiente reconocimiento inicia un intento nuevo.
+**¿Cómo se evita contar cada frame?** El primer reconocimiento abre un encuentro y sólo registra un evento. Las pérdidas temporales de identidad de SFace no lo cierran: YuNet debe observar cero rostros continuamente durante `ABSENCE_SECONDS`, inicialmente cuatro segundos. Una cara detectada antes del plazo cancela la ausencia. En administración el historial queda suspendido; al volver a la vista pública se reinicia el encuentro y el siguiente reconocimiento inicia un intento nuevo.
 
 **¿Por qué usar baja lógica?** Desactivar no borra al cliente ni sus registros; permite auditoría y reactivación.
 
