@@ -4,7 +4,7 @@ import time, cv2, numpy as np
 class AccessService:
     def __init__(self, app, face, absence_seconds):
         self.app=app; self.face=face; self.absence_seconds=absence_seconds; self.presence={}
-        self.status={'result':'ESPERANDO ROSTRO','name':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}
+        self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}
         self.frame_no=0
     def evaluate(self, client):
         today=date.today().isoformat()
@@ -27,11 +27,11 @@ class AccessService:
         return result,reason
     def process(self, frame):
         self.frame_no+=1
-        if not self.face.ready: self.status={'result':'ESPERANDO ROSTRO','name':'—','expiry':'—','accesses':0,'reason':self.face.error or 'Cargando modelos faciales'}; return frame
+        if not self.face.ready: self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':self.face.error or 'Cargando modelos faciales'}; return frame
         if self.frame_no % 4: return frame
         faces=self.face.detect(frame)
         if not faces:
-            self.status={'result':'ESPERANDO ROSTRO','name':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}; return frame
+            self.status={'result':'ESPERANDO ROSTRO','name':'—','ci':'—','expiry':'—','accesses':0,'reason':'Acerque su rostro a la cámara.'}; return frame
         face=max(faces,key=lambda f:f[2]*f[3]); emb=self.face.embedding(frame,face)
         with self.app.app_context():
             clients=self._clients(); best=None; score=-1
@@ -41,11 +41,11 @@ class AccessService:
                 if s>score: best,score=c,s
             x,y,w,h=map(int,face[:4]); color=(0,180,255)
             if not best or score < self.face.cos_threshold:
-                self.status={'result':'DESCONOCIDO','name':'DESCONOCIDO','expiry':'—','accesses':0,'reason':f'Similitud insuficiente ({score:.3f})'}
+                self.status={'result':'DESCONOCIDO','name':'DESCONOCIDO','ci':'—','expiry':'—','accesses':0,'reason':f'Similitud insuficiente ({score:.3f})'}
             else:
                 result,reason=self.handle_recognized(best)
                 db_accesses=self.app.extensions['db_count'](best['id'])
-                self.status={'result':result,'name':best['nombre_completo'],'expiry':best['fecha_fin'] or 'Indefinido','accesses':db_accesses,'reason':reason}
+                self.status={'result':result,'name':best['nombre_completo'],'ci':best['ci'],'expiry':best['fecha_fin'] or 'Indefinido','accesses':db_accesses,'reason':reason}
                 color=(30,180,30) if result=='ACCESO PERMITIDO' else (20,30,230)
             cv2.rectangle(frame,(x,y),(x+w,y+h),color,2)
         return frame

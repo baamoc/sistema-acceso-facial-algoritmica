@@ -4,13 +4,21 @@ import numpy as np
 from werkzeug.security import generate_password_hash
 from app import create_app
 from models.database import close_db, get_db
+from services.camera_service import CameraService
 
 class NoFace:
  ready=False; error='Prueba sin modelos'
 
-def build():
+class RecognizesFace:
+ ready=True; error=None; cos_threshold=.363
+ def detect(self, frame): return [np.array([0,0,3,3,0,0,0,0,0,0,0,0,0,0,0], dtype=np.float32)]
+ def embedding(self, frame, face): return np.array([1,0], dtype=np.float32)
+ @staticmethod
+ def cosine(a,b): return float(np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b)))
+
+def build(face=None):
  folder=tempfile.TemporaryDirectory(); root=Path(folder.name)
- app=create_app({'TESTING':True,'DATABASE':root/'real.sqlite','FACE_DIR':root/'faces','MODEL_DIR':root/'models','FACE_SERVICE':NoFace(),'ABSENCE_SECONDS':4},start_camera=False)
+ app=create_app({'TESTING':True,'DATABASE':root/'real.sqlite','FACE_DIR':root/'faces','MODEL_DIR':root/'models','FACE_SERVICE':face or NoFace(),'ABSENCE_SECONDS':4},start_camera=False)
  return app,folder
 def insert(app,name,ci,start='2020-01-01',end=None,active=1):
  with app.app_context():
@@ -44,6 +52,29 @@ def test_login_password_hash_and_persistence():
    assert db.execute('SELECT password_hash FROM administradores').fetchone()[0] != 'secreta'
   c=app.test_client(); assert c.post('/admin/login',data={'usuario':'admin','password':'mala'}).status_code==200
   assert c.post('/admin/login',data={'usuario':'admin','password':'secreta'}).status_code==302
+ finally:
+  with app.app_context(): close_db()
+  tmp.cleanup()
+def test_camera_keeps_raw_frame_separate_from_display_frame():
+ camera=CameraService()
+ camera.processor=lambda frame: frame.__setitem__((0,0), [255,0,0]) or frame
+ source=np.zeros((3,3,3), dtype=np.uint8)
+ camera._handle_frame(source)
+ raw=camera.get_raw_frame(); display=camera.get_display_frame()
+ assert np.array_equal(raw, source)
+ assert not np.array_equal(raw, display)
+ assert np.array_equal(display[0,0], [255,0,0])
+def test_recognized_status_exposes_client_ci():
+ app,tmp=build(RecognizesFace())
+ try:
+  insert(app,'Ana Pérez','123456')
+  with app.app_context():
+   service=app.extensions['access']
+   for _ in range(4): service.process(np.zeros((8,8,3), dtype=np.uint8))
+   assert service.status['ci']=='123456'
+   assert service.status['result']=='ACCESO PERMITIDO'
+  response=app.test_client().get('/api/status')
+  assert response.get_json()['ci']=='123456'
  finally:
   with app.app_context(): close_db()
   tmp.cleanup()

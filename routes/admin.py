@@ -35,7 +35,7 @@ def dashboard():
  clients=db.execute(sql+' ORDER BY id DESC',args).fetchall()
  return render_template('admin.html',clients=clients,q=q,count=client_count,validity=validity)
 def capture_embedding():
- camera=current_app.extensions['camera']; face=current_app.extensions['face']; frame=camera.get_frame()
+ camera=current_app.extensions['camera']; face=current_app.extensions['face']; frame=camera.get_raw_frame()
  if frame is None: raise ValueError('La cámara aún no entregó una imagen.')
  if not face.ready: raise ValueError(face.error or 'Modelos faciales no listos.')
  faces=face.detect(frame)
