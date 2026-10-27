@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sistema de detección de fatiga</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #eef2f5; color: #17212b; }
+    main { width: min(1100px, 94%); margin: 24px auto; }
+    h1 { text-align: center; margin-bottom: 22px; }
+    .grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; }
+    .card { background: white; border-radius: 10px; padding: 18px; box-shadow: 0 2px 9px #0002; }
+    .video { width: 100%; min-height: 300px; background: #111; border-radius: 7px; display: block; }
+    .state { text-align: center; font-size: 25px; font-weight: bold; margin: 15px 0; }
+    .metrics { display: grid; gap: 10px; }
+    .metric { display: flex; justify-content: space-between; padding: 11px; background: #f2f5f7; border-radius: 6px; }
+    .alert { min-height: 72px; display: grid; place-items: center; text-align: center; font-size: 22px; font-weight: bold; background: #fff3cd; border: 2px solid #ffc107; border-radius: 7px; margin-top: 16px; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+    th { background: #263b50; color: white; }
+    .history { margin-top: 20px; }
+    .error { color: #b00020; text-align: center; font-weight: bold; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>SISTEMA DE DETECCIÓN DE FATIGA</h1>
+  <div class="grid">
+    <section class="card">
+      <img class="video" src="{{ url_for('video_feed') }}" alt="Cámara en vivo">
+      <p id="message" class="state">CALIBRANDO — MIRE AL FRENTE</p>
+      <p id="camera-error" class="error"></p>
+    </section>
+
+    <section class="card">
+      <div class="state">Estado: <span id="state">CALIBRANDO</span></div>
+      <div class="metrics">
+        <div class="metric"><span>Apertura ocular (EAR)</span><strong id="ear">—</strong></div>
+        <div class="metric"><span>Ojos cerrados</span><strong><span id="eye-time">0.0</span> s</strong></div>
+        <div class="metric"><span>Apertura de boca (MAR)</span><strong id="mar">—</strong></div>
+        <div class="metric"><span>Bostezos</span><strong id="yawns">0</strong></div>
+        <div class="metric"><span>Posición de cabeza</span><strong id="head-position">—</strong></div>
+        <div class="metric"><span>Cabeceos</span><strong id="head-nods">0</strong></div>
+      </div>
+      <div id="alert" class="alert">Mire al frente con ojos abiertos y boca cerrada.</div>
+    </section>
+  </div>
+
+  <section class="card history">
+    <h2>Historial de eventos</h2>
+    <table>
+      <thead><tr><th>Evento</th><th>Hora</th><th>Valor</th></tr></thead>
+      <tbody id="events"><tr><td colspan="3">Todavía no hay eventos.</td></tr></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  const show = (id, value) => document.getElementById(id).textContent = value;
+
+  async function updateScreen() {
+    try {
+      const data = await fetch('/status').then(response => response.json());
+      show('state', data.state);
+      show('message', data.message);
+      show('ear', data.ear ?? '—');
+      show('eye-time', data.eyes_closed_seconds);
+      show('mar', data.mar ?? '—');
+      show('yawns', data.yawns);
+      show('head-position', data.head_position ?? '—');
+      show('head-nods', data.head_nods);
+      show('alert', data.alert);
+      show('camera-error', data.camera_error || '');
+
+      const rows = data.events.length
+        ? data.events.map(event => `<tr><td>${event.type}</td><td>${event.time}</td><td>${event.value}</td></tr>`).join('')
+        : '<tr><td colspan="3">Todavía no hay eventos.</td></tr>';
+      document.getElementById('events').innerHTML = rows;
+    } catch (error) {
+      show('camera-error', 'No se pudo consultar el estado del programa.');
+    }
+  }
+
+  updateScreen();
+  setInterval(updateScreen, 400);
+</script>
+</body>
+</html>
