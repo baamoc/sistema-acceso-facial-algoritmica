@@ -9,6 +9,9 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Respaldo local del proyecto retirado
+_RESPALDO_APP_FACIAL_LOCAL.patch
+
 # Variables y secretos
 .env
 .env.*
@@ -17,16 +20,6 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
-
-# Rostros / fotografías
-rostros/
-faces/*
-!faces/.gitkeep
-
-# Modelos descargables. `models/` no se ignora porque es el paquete Python del proyecto.
-face_models/*
-!face_models/.gitkeep
-*.onnx
 
 # IDE
 .vscode/
