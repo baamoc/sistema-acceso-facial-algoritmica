@@ -182,11 +182,19 @@ class FatigueDetector:
                 time.sleep(0.1)
                 continue
 
-            frame = self.process_frame(frame)
-            ok, encoded = cv2.imencode(".jpg", frame)
-            if ok:
+            try:
+                frame = self.process_frame(frame)
+                ok, encoded = cv2.imencode(".jpg", frame)
+                if ok:
+                    with self.lock:
+                        self.latest_jpeg = encoded.tobytes()
+                        self.camera_error = ""
+            except Exception as exc:
+                error = f"Error procesando la cámara: {exc}"
+                print(error, file=sys.stderr)
                 with self.lock:
-                    self.latest_jpeg = encoded.tobytes()
+                    self.camera_error = error
+                time.sleep(0.1)
 
     def process_frame(self, frame):
         """Obtiene landmarks, calcula métricas y actualiza las reglas."""
@@ -341,6 +349,7 @@ class FatigueDetector:
         self.head_is_down = False
         with self.lock:
             self.status.update(
+                state="SIN ROSTRO",
                 face_detected=False,
                 eyes_closed_seconds=0.0,
                 message="ROSTRO NO DETECTADO",
@@ -418,12 +427,32 @@ def run_self_test():
     test.update_rules(0.30, 0.30, 0.25, 23.0)
     test.update_rules(0.30, 0.30, 0.25, 24.1)
     assert test.yawn_count == 2
+    test.update_rules(0.30, 0.03, 0.25, 24.2)
+    test.update_rules(0.30, 0.30, 0.25, 25.0)
+    test.update_rules(0.30, 0.30, 0.25, 26.1)
+    assert test.yawn_count == 3
+    assert test.status['state'] == 'CANSANCIO'
 
-    test.update_rules(0.30, 0.03, 0.32, 30.0)
-    test.update_rules(0.30, 0.03, 0.33, 30.2)
+    test.update_rules(0.10, 0.03, 0.25, 27.0)
+    test.update_rules(0.10, 0.03, 0.25, 31.1)
+    assert test.status['state'] == 'SUEÑO'
+    test.update_rules(0.30, 0.03, 0.25, 31.2)
+
+    test.update_rules(0.30, 0.03, 0.32, 32.0)
+    test.update_rules(0.30, 0.03, 0.33, 32.2)
     assert test.head_nod_count == 0
-    test.update_rules(0.30, 0.03, 0.25, 30.5)
+    test.update_rules(0.30, 0.03, 0.25, 32.5)
     assert test.head_nod_count == 1
+    test.update_rules(0.30, 0.03, 0.32, 34.1)
+    test.update_rules(0.30, 0.03, 0.25, 34.5)
+    test.update_rules(0.30, 0.03, 0.32, 36.1)
+    test.update_rules(0.30, 0.03, 0.25, 36.5)
+    assert test.head_nod_count == 3
+    assert test.status['state'] == 'ALERTA'
+
+    test.update_rules(0.10, 0.03, 0.25, 37.0)
+    test.update_rules(0.10, 0.03, 0.25, 41.1)
+    assert test.status['state'] == 'ALERTA'
     print("Pruebas de reglas: OK")
 
 
