@@ -55,13 +55,13 @@ seguida de una recuperación, cuenta un cabeceo. Tres generan
 
 Las constantes están al inicio de `app.py`. Las más importantes son:
 
-- `EYE_CLOSED_SECONDS`: tiempo para alerta de ojos cerrados.
-- `EYE_CLOSED_RATIO`: proporción del EAR calibrado considerada cierre.
-- `YAWN_MIN_SECONDS`: duración mínima de apertura de boca.
-- `YAWNS_FOR_ALERT`: bostezos necesarios para alerta.
-- `HEAD_DROP_DELTA`: caída necesaria para iniciar un cabeceo.
-- `HEAD_NOD_COOLDOWN`: pausa entre cabeceos.
-- `HEAD_NODS_FOR_ALERT`: cabeceos necesarios para alerta.
+- `SEGUNDOS_OJOS_CERRADOS`: tiempo para alerta de ojos cerrados.
+- `PROPORCION_OJO_CERRADO`: proporción del EAR calibrado considerada cierre.
+- `SEGUNDOS_MIN_BOSTEZO`: duración mínima de apertura de boca.
+- `BOSTEZOS_PARA_ALERTA`: bostezos necesarios para alerta.
+- `DELTA_CAIDA_CABEZA`: caída necesaria para iniciar un cabeceo.
+- `SEGUNDOS_ESPERA_CABECEO`: pausa entre cabeceos.
+- `CABECEOS_PARA_ALERTA`: cabeceos necesarios para alerta.
 
 Estos valores son parámetros de calibración y pueden requerir ajustes según la
 cámara, iluminación, distancia y persona.
