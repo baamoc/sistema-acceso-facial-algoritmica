@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traductor de texto</title>
+    <style>
+        body {
+            margin: 0;
+            background: #eef2f6;
+            color: #1d2939;
+            font-family: Arial, sans-serif;
+        }
+
+        main {
+            width: min(900px, calc(100% - 40px));
+            margin: 30px auto;
+            padding: 28px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        h1 {
+            margin-top: 0;
+            text-align: center;
+            color: #174a7e;
+        }
+
+        label {
+            display: block;
+            margin: 18px 0 7px;
+            font-weight: bold;
+        }
+
+        textarea, select {
+            width: 100%;
+            box-sizing: border-box;
+            border: 1px solid #98a2b3;
+            border-radius: 6px;
+            padding: 10px;
+            font: inherit;
+        }
+
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        select {
+            max-width: 320px;
+            background: white;
+        }
+
+        .botones {
+            display: flex;
+            gap: 12px;
+            margin-top: 18px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 11px 18px;
+            border: 0;
+            border-radius: 6px;
+            background: #1769aa;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #12558b;
+        }
+
+        .aviso, .estado {
+            margin: 12px 0 0;
+            color: #475467;
+        }
+
+        .estado {
+            padding: 10px;
+            border-radius: 6px;
+            background: #eaf3fb;
+            color: #174a7e;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>TRADUCTOR DE TEXTO</h1>
+
+        <form method="post">
+            <label for="texto-original">TEXTO ORIGINAL</label>
+            <textarea id="texto-original" name="texto_original">{{ texto_original }}</textarea>
+
+            <label for="idioma-destino">IDIOMA DESTINO</label>
+            <select id="idioma-destino" name="idioma_destino">
+                {% for nombre in idiomas %}
+                    <option value="{{ nombre }}" {% if nombre == idioma_destino %}selected{% endif %}>
+                        {{ nombre }}
+                    </option>
+                {% endfor %}
+            </select>
+
+            <p class="aviso">
+                Al capturar, tiene 2 segundos para cambiar a la ventana que contiene el texto.
+            </p>
+
+            <div class="botones">
+                <button type="submit" formaction="{{ url_for('capturar_texto') }}">CAPTURAR TEXTO</button>
+                <button type="submit" formaction="{{ url_for('traducir_texto') }}">TRADUCIR</button>
+            </div>
+
+            <label for="texto-traducido">TEXTO TRADUCIDO</label>
+            <textarea id="texto-traducido" name="texto_traducido" readonly>{{ texto_traducido }}</textarea>
+
+            <div class="botones">
+                <button type="button" id="boton-escuchar">ESCUCHAR</button>
+            </div>
+        </form>
+
+        <p class="estado" id="estado">{{ mensaje }}</p>
+    </main>
+
+    <script>
+        const botonEscuchar = document.getElementById("boton-escuchar");
+        const estado = document.getElementById("estado");
+        let reproductor = null;
+        let urlAudio = null;
+
+        botonEscuchar.addEventListener("click", async () => {
+            const textoTraducido = document.getElementById("texto-traducido").value.trim();
+            const idiomaDestino = document.getElementById("idioma-destino").value;
+
+            if (!textoTraducido) {
+                estado.textContent = "No hay texto traducido para escuchar.";
+                return;
+            }
+
+            const datos = new FormData();
+            datos.append("texto_traducido", textoTraducido);
+            datos.append("idioma_destino", idiomaDestino);
+            estado.textContent = "Generando audio...";
+
+            try {
+                const respuesta = await fetch("{{ url_for('generar_audio') }}", {
+                    method: "POST",
+                    body: datos
+                });
+
+                if (!respuesta.ok) {
+                    const detalle = await respuesta.json();
+                    throw new Error(detalle.error);
+                }
+
+                const audioMp3 = await respuesta.blob();
+                if (urlAudio) URL.revokeObjectURL(urlAudio);
+                urlAudio = URL.createObjectURL(audioMp3);
+                reproductor = new Audio(urlAudio);
+                await reproductor.play();
+                estado.textContent = "Reproduciendo traducción.";
+            } catch (error) {
+                estado.textContent = error.message || "No se pudo reproducir el audio.";
+            }
+        });
+    </script>
+</body>
+</html>
